@@ -1,2 +1,0 @@
-# Hackerrank-oct
- Ghost data
