@@ -1,0 +1,34 @@
+{
+  "exported_at": "2026-09-15T12:00:00Z",
+  "source": "records_assurance_service",
+  "snapshots": [
+    {
+      "captured_at": "2026-09-15T12:00:00Z",
+      "data_store": "identity_service",
+      "collection": "deleted_customer_references",
+      "records": [
+        {
+          "resource_id": "tombstone_70003",
+          "subject_reference": "user_9003",
+          "name": null,
+          "email": null,
+          "phone": null,
+          "email_hash": "de561f738ae63e1b36d4356e604a6b99e018075a1055aba04877d068925cbb01",
+          "account_status": "DELETED"
+        }
+      ]
+    },
+    {
+      "captured_at": "2026-09-15T12:00:00Z",
+      "data_store": "security_service",
+      "collection": "security_audit_events",
+      "records": [
+        {
+          "resource_id": "audit_record_70003",
+          "subject_reference": "user_9003",
+          "event_name": "account_deletion_reviewed"
+        }
+      ]
+    }
+  ]
+}

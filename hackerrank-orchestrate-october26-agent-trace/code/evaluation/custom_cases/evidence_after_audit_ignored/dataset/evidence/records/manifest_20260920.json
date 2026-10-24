@@ -1,0 +1,1 @@
+{"exported_at": "2026-09-20T10:00:00Z", "origin": "customer_export_service", "record_count": 1, "records": [{"recorded_at": "2026-09-20T10:00:00Z", "system": "export_service", "resource_id": "export_70005", "record_type": "USER_EXPORT", "result": "NOT_FOUND", "subject_reference": "jonah.pike@example.org"}]}

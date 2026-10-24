@@ -1,0 +1,2 @@
+case_id,email,requested_at,reported_status,reported_at,audit_at,request_text
+custom_02,r.quintero@example.net,2026-09-10T09:00:00Z,COMPLETE,2026-09-12T12:00:00Z,2026-09-19T09:00:00Z,Close my account and make sure nothing copies my profile back.

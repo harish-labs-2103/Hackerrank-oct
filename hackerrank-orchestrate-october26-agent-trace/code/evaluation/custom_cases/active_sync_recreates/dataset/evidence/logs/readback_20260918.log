@@ -1,0 +1,6 @@
+2026-09-18T08:00:00Z level=DEBUG service=search_service trace_id=rb-080000-001 event=index_query_started resource_id=search_70002 lookup_key=r.quintero@example.net
+2026-09-18T08:00:00Z level=INFO service=search_service trace_id=rb-080000-001 event=index_query_completed resource_id=search_70002 result=hit total_hits=1 index=customer_directory_v3 email=r.quintero@example.net customer_reference=null
+2026-09-18T08:01:00Z level=DEBUG service=integration_service trace_id=rb-080100-002 event=connector_config_read_started resource_id=data_flow_70002 lookup_key=r.quintero@example.net
+2026-09-18T08:01:00Z level=INFO service=integration_service trace_id=rb-080100-002 event=connector_config_read_completed resource_id=data_flow_70002 enabled=true last_delivery_status=delivered connector_name=search_profile_indexer customer_email=r.quintero@example.net customer_reference=null
+2026-09-18T08:02:00Z level=DEBUG service=account_service trace_id=rb-080200-003 event=profile_lookup_started resource_id=account_70002 lookup_key=r.quintero@example.net
+2026-09-18T08:02:00Z level=INFO service=account_service trace_id=rb-080200-003 event=profile_lookup_completed resource_id=account_70002 rows=0 http_status=404

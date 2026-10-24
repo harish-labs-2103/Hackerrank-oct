@@ -1,0 +1,26 @@
+app:
+  log_level: INFO
+dataset:
+  root: dataset
+reports:
+  directory: reports
+  format: json
+output:
+  path: output.csv
+investigation:
+  default_mode: read_only
+  max_agent_iterations: 6
+  max_tool_calls: 12
+  case_timeout_s: 60
+  workers: 1
+agent:
+  enabled: auto
+  provider: ollama
+  model: gemma3:4b
+  num_ctx: 8192
+  cache_dir: code/cache/llm
+  offline: false
+security:
+  allow_destructive_actions: false
+  require_approval: true
+  allow_reveal: false

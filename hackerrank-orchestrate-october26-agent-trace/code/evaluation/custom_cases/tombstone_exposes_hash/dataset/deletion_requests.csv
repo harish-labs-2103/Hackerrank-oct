@@ -1,0 +1,2 @@
+case_id,email,requested_at,reported_status,reported_at,audit_at,request_text
+custom_03,amaka.eze@example.com,2026-09-08T09:00:00Z,COMPLETE,2026-09-10T12:00:00Z,2026-09-16T09:00:00Z,Remove my details; keeping an internal deleted-account reference is fine.
