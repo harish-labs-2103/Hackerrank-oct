@@ -12,14 +12,17 @@ import typer
 
 from . import __version__
 from .config import REPO_ROOT, config_path, default_yaml, load_settings
+from rich.tree import Tree
+
 from .engine import STAGES, CaseResult, StageEvent
 from .ingestion import IngestionError
 from .reporting import FINDING_TEXT, SEVERITY, case_to_dict, save_case
-from .ui.console import UIState, banner, make_console, status_text, table
+from .ui.console import (UIState, banner, file_icon, make_console, panel,
+                         status_badge, status_text, table, timeline_badge)
 from .ui.masking import mask_email, mask_identifier, mask_text
 
 app = typer.Typer(add_completion=False, no_args_is_help=False, rich_markup_mode=None,
-                  help="Data Investigator — evidence-backed deletion auditing (read-only).")
+                  help="Davestigator — evidence-backed deletion auditing (read-only).")
 sources_app = typer.Typer(help="Inspect configured evidence sources.")
 app.add_typer(sources_app, name="sources")
 
@@ -84,14 +87,15 @@ def _investigate(sess, case_id: str, show_stages: bool) -> CaseResult:
         if show_stages and not UI.quiet and UI.fmt == "text":
             i = STAGES.index(e.stage) + 1 if e.stage in STAGES else 0
             label = f"[{i}/{len(STAGES)}] {e.stage} "
-            con.print(f"{label}{'.' * max(2, 44 - len(label))} {e.status}" + (f"  ({mask_text(e.detail)})" if UI.verbose and e.detail else ""))
+            st = "[bold green]DONE[/bold green]" if e.status == "DONE" else (f"[bold red]{e.status}[/bold red]" if e.status == "FAILED" else e.status)
+            con.print(f"{label}{'.' * max(2, 44 - len(label))} {st}" + (f"  ({mask_text(e.detail)})" if UI.verbose and e.detail else ""))
 
     return sess.investigator.investigate(q, on_stage)
 
 
 def _version(value: bool):
     if value:
-        typer.echo(f"data-investigator {__version__}")
+        typer.echo(f"Davestigator {__version__}")
         raise typer.Exit(0)
 
 
@@ -100,7 +104,7 @@ def main(
     ctx: typer.Context,
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show stage details, evidence references and rule ids."),
     quiet: bool = typer.Option(False, "--quiet", "-q", help="Suppress progress output."),
-    config: Optional[str] = typer.Option(None, "--config", help="Path to data-investigator.yaml."),
+    config: Optional[str] = typer.Option(None, "--config", help="Path to davestigator.yaml."),
     no_color: bool = typer.Option(False, "--no-color", help="Disable colours (NO_COLOR is also honoured)."),
     fmt: str = typer.Option("text", "--format", help="text or json (machine-readable output where supported)."),
     no_llm: bool = typer.Option(False, "--no-llm", help="Deterministic engine only for any command."),
@@ -115,22 +119,23 @@ def main(
     CFG_PATH = config
     if ctx.invoked_subcommand is None:
         con = _con()
-        con.print(banner("DATA INVESTIGATOR", "AI-Powered Data Deletion Auditor\nInvestigate. Trace. Verify. Report."))
+        con.print(banner("DAVESTIGATOR", "AI-Powered Data Deletion Auditor\nInvestigate. Trace. Verify. Report."))
         con.print(f"Version: {__version__}\nMode: Local Evidence Audit\nSecurity: Read-only by default\n")
         if not config_path(config).is_file():
-            con.print("Using built-in defaults (dataset: ./dataset). Optional: run 'data-investigator init'.\n")
+            con.print("Using built-in defaults (dataset: ./dataset). Optional: run 'Davestigator init'.\n")
         con.print("GETTING STARTED\n  init          Configure your project\n  sources list  View available evidence sources\n"
-                  "  scan          Build the evidence index\n  audit         Investigate a deletion request (--case ID | --all)\n"
-                  "  report        View an investigation report\n  plan          Generate a remediation plan\n"
+                  "  scan          Build the evidence index\n  dashboard     Interactive terminal case browser\n"
+                  "  audit         Investigate a deletion request (--case ID | --all)\n"
+                  "  report        View an investigation report (--export html|json|markdown)\n  plan          Generate a remediation plan\n"
                   "  verify        Verify deletion evidence\n  validate-output  Check output.csv against the contract\n\n"
-                  "Run 'data-investigator --help' for all commands.")
+                  "Run 'Davestigator --help' for all commands.")
 
 
 # ---------------------------------------------------------------------- #
 @app.command()
 def init(force: bool = typer.Option(False, "--force", help="Overwrite an existing configuration."),
          dataset: Optional[str] = typer.Option(None, "--dataset", help="Dataset directory (default ./dataset).")):
-    """Create data-investigator.yaml, check the dataset, prepare reports/."""
+    """Create davestigator.yaml, check the dataset, prepare reports/."""
     con = _con()
     con.print("PROJECT SETUP\n")
     failures = 0
@@ -183,7 +188,7 @@ def init(force: bool = typer.Option(False, "--force", help="Overwrite an existin
     if failures:
         con.print("\nSetup incomplete. Fix the items marked FAIL.")
         raise typer.Exit(2)
-    con.print(f"\nProject initialized.\n\nConfiguration: {p}\nEvidence:      {root}\nReports:       {rep}\n\nNext step:\n  data-investigator sources list")
+    con.print(f"\nProject initialized.\n\nConfiguration: {p}\nEvidence:      {root}\nReports:       {rep}\n\nNext step:\n  Davestigator sources list")
 
 
 @sources_app.command("list")
@@ -199,10 +204,12 @@ def sources_list():
         try:
             _read(root / name, cols)
             st = "Available"
+            st_cell = "[bold green]Available[/bold green]"
         except IngestionError:
             st = "Invalid" if (root / name).is_file() else "Unavailable"
+            st_cell = f"[bold red]{st}[/bold red]"
         counts[st] += 1
-        t.add_row(name, "CSV", st, "Read-only")
+        t.add_row(name, "CSV", st_cell, "Read-only")
     try:
         from .ingestion import load_dataset
 
@@ -210,17 +217,23 @@ def sources_list():
         groups = Counter(Path(e.file_path).suffix.lstrip(".") for e in ds.manifest.values())
         missing = Counter(Path(e.file_path).suffix.lstrip(".") for e in ds.manifest.values() if not ds.evidence_path(e).is_file())
         for ext, n in sorted(groups.items()):
-            st = "Available" if not missing[ext] else f"Unavailable ({missing[ext]} missing)"
+            if not missing[ext]:
+                st = "Available"
+                st_cell = "[bold green]Available[/bold green]"
+            else:
+                st = f"Unavailable ({missing[ext]} missing)"
+                st_cell = f"[bold red]{st}[/bold red]"
             if ext == "png" and s.agent.enabled == "off":
                 st = "Unsupported (needs AI extraction)"
+                st_cell = "[bold yellow]Unsupported (needs AI)[/bold yellow]"
             counts[st.split(" ")[0]] += 1
-            t.add_row(f"evidence/*.{ext} ({n} files)", ext.upper(), st, "Read-only")
+            t.add_row(f"{ext.upper()} ({n} files)", ext.upper(), st_cell, "Read-only")
     except IngestionError:
         pass
     con = _con()
-    con.print("DATA SOURCES")
+    con.print(banner("DATA SOURCES", "Configured evidence sources and feeds (read-only)"))
     con.print(t)
-    con.print("\n" + "  ".join(f"{k}: {v}" for k, v in sorted(counts.items())) + "\nAll listed sources are read-only.\n\nNext step:\n  data-investigator scan")
+    con.print("\n" + "  ".join(f"{k}: {v}" for k, v in sorted(counts.items())) + "\nAll listed sources are read-only.\n\nNext step:\n  Davestigator scan")
 
 
 @app.command()
@@ -259,8 +272,19 @@ def audit(
     no_llm: bool = typer.Option(False, "--no-llm", help="Deterministic engine only."),
     output: Optional[str] = typer.Option(None, "--output", help="Output path for --all (default ./output.csv)."),
     save_reports: bool = typer.Option(False, "--save-reports", help="With --all: write reports/<case>.json for every case."),
+    live: bool = typer.Option(False, "--live", help="Query configured connectors now instead of the dataset folder."),
+    email: Optional[str] = typer.Option(None, "--email", help="With --live: audit one subject by email."),
+    requests: Optional[str] = typer.Option(None, "--requests", help="With --live: CSV in deletion_requests.csv format."),
 ):
     """Investigate deletion requests (read-only)."""
+    if live:
+        if bool(email) == bool(requests):
+            _fail("with --live use exactly one of --email ADDRESS or --requests FILE", 1)
+        from .connect_cli import live_audit
+
+        return live_audit(email=email, requests=requests, output=output, ui=UI, cfg_path=CFG_PATH)
+    if email or requests:
+        _fail("--email/--requests need --live (dataset audits use --case or --all)", 1)
     if bool(case) == bool(all_):
         _fail("use exactly one of --case ID or --all", 1)
     if case:
@@ -273,32 +297,51 @@ def _audit_one(case_id: str, no_llm: bool):
     sess = _session(no_llm)
     q = _find_case(sess, case_id)
     if UI.fmt == "text":
-        con.print(banner("DATA INVESTIGATOR — DELETION AUDIT"))
-        con.print(f"Case ID:       {q.case_id}\nRequester:     {mask_email(q.email)}\nAudit time:    {q.audit_at:%Y-%m-%d %H:%M:%S} UTC\nMode:          READ-ONLY\n\nINVESTIGATION\n")
+        meta = (
+            f"Case ID:       [bold]{q.case_id}[/bold]\n"
+            f"Requester:     {mask_email(q.email)}\n"
+            f"Audit time:    {q.audit_at:%Y-%m-%d %H:%M:%S} UTC\n"
+            f"Reported:      {q.reported_status}\n"
+            f"Mode:          [bold cyan]READ-ONLY[/bold cyan]"
+        )
+        con.print(banner("DAVESTIGATOR — DELETION AUDIT", meta, border_style="cyan"))
+        con.print("\n[bold cyan]INVESTIGATION PIPELINE[/bold cyan]\n")
     r = _investigate(sess, case_id, show_stages=True)
     s = _settings()
     path = save_case(r, s.path(s.reports.directory))
     if UI.fmt == "json":
         con.print_json(json.dumps(case_to_dict(r)))
         return
-    con.print(f"\nRESULT: {status_text(r.deletion_status)}\n")
+    con.print(f"\nAUDIT RESULT:\n  {status_badge(r.deletion_status)}\n")
     findings = [x for x in r.steps if x.phase.value == "FINDING"]
     if findings:
-        con.print("FINDINGS\n")
-        for f in findings:
-            con.print(f"[!] {f.operation.replace('REPORT_', '').replace('_', ' ').title()}\n    System:      {f.system_id}\n"
-                      f"    Resource:    {f.resource_id}\n    Evidence:    {f.evidence_id}\n")
+        con.print("[bold red]CRITICAL FINDINGS[/bold red]\n")
+        ob_map = {(o.system_id, o.resource_id): o for o in r.obligations}
+        for n, f in enumerate(findings, 1):
+            o = ob_map.get((f.system_id, f.resource_id))
+            rule_id = o.treatment.rule_id if o else "-"
+            op_label = f.operation.replace('REPORT_', '').replace('_', ' ').title()
+            body = (
+                f"System:    [bold]{f.system_id}[/bold]       Resource: [bold]{f.resource_id}[/bold]\n"
+                f"Evidence:  [cyan]{f.evidence_id}[/cyan]   Rule: [dim]{rule_id}[/dim]   State: [red]{f.state}[/red]\n\n"
+                f"{FINDING_TEXT.get(f.operation, 'A policy violation was confirmed from visible evidence.')}"
+            )
+            con.print(panel(body, title=f"F-{n:03d} [bold white on red] {op_label} [/]", border_style="red"))
     ok = [o for o in r.obligations if o.satisfied]
-    for o in ok[:5]:
-        con.print(f"[✓] {o.resource_id} ({o.category}) is {o.state} as required" + (f" — {o.evidence.source_id}" if o.evidence else ""))
-    if len(ok) > 5:
-        con.print(f"    +{len(ok) - 5} more")
+    if ok:
+        con.print("\n[bold green]SATISFIED OBLIGATIONS[/bold green]")
+        for o in ok[:5]:
+            con.print(f"  [bold green][PASS][/bold green] {o.resource_id} ({o.category}) is {o.state} as required" + (f" - [cyan]{o.evidence.source_id}[/cyan]" if o.evidence else ""))
+        if len(ok) > 5:
+            con.print(f"    [dim]+{len(ok) - 5} more[/dim]")
     for g in r.gaps:
-        con.print(f"[?] {mask_text(g)}")
+        con.print(f"  [bold yellow][?][/bold yellow] {mask_text(g)}")
     if UI.verbose and r.identity:
         con.print(f"\nIdentity: {r.identity.user_id} via {', '.join(r.identity.path)}; intent {r.intent.intent} ({r.intent.source})")
     nxt = ["findings", "timeline", "plan"] if r.deletion_status == "INCOMPLETE" else ["report"]
-    con.print(f"\nREPORT\n  {path}\n\nRun:\n" + "\n".join(f"  data-investigator {c} --case {case_id}" for c in nxt))
+    action_text = f"Report saved:\n  [cyan]{path}[/cyan]\n\nNext actions:\n" + "\n".join(f"  Davestigator {c} --case {case_id}" for c in nxt)
+    con.print("")
+    con.print(panel(action_text, title="NEXT STEPS", border_style="blue"))
 
 
 def _audit_all(sample: bool, no_llm: bool, output: Optional[str], save_reports: bool):
@@ -385,25 +428,28 @@ def identity(case: str = typer.Option(..., "--case")):
     if UI.fmt == "json":
         con.print_json(json.dumps(case_to_dict(r)["identity"]))
         return
-    con.print(f"IDENTITY INVESTIGATION\n\nCase: {case}\n\nRequested identifier:\n  {mask_email(r.request.email)}")
+    con.print(banner("IDENTITY INVESTIGATION", f"Case: {case}\nRequested: {mask_email(r.request.email)}", border_style="cyan"))
     if r.identity is None:
         con.print("\nNot evaluated: the request does not authorize deletion.")
         return
     g = sess.investigator.graph
-    t = table("Kind", "Value", "Relationship", "Source")
     uid = r.identity.user_id
+    status = "Resolved" if uid and not r.identity.ambiguities else ("Ambiguous" if uid else "Unresolved")
+    st_badge = "[bold white on green] RESOLVED [/]" if status == "Resolved" else f"[bold white on red] {status.upper()} [/]"
+    con.print(f"\nStatus: {st_badge}  user_id: [bold cyan]{uid}[/bold cyan] (via {', '.join(r.identity.path)})\n")
+
+    tree = Tree(f"[bold cyan]User: {uid}[/bold cyan] ({st_badge})")
     for kind, val in sorted(g.user_idents.get(uid, set())):
         srcs = g.owners[(kind, val)][uid]
         rel = "current" if any(s == "user_identities" for s, _ in srcs) else "historical"
         if kind == "email_hash" and all(s == "user_identities" for s, _ in srcs):
             rel = "derived / current"
-        t.add_row(kind, mask_identifier(kind, val), rel, ", ".join(sorted({s for s, _ in srcs})))
-    con.print(t)
-    status = "Resolved" if uid and not r.identity.ambiguities else ("Ambiguous" if uid else "Unresolved")
-    con.print(f"\nIDENTITY RESULT\n\nStatus: {status}\nuser_id: {uid} (via {', '.join(r.identity.path)})")
+        src_str = ", ".join(sorted({s for s, _ in srcs}))
+        tree.add(f"[bold]{kind}[/bold] ({rel})\n   Value: [green]{mask_identifier(kind, val)}[/green]  [dim]Source: {src_str}[/dim]")
+    con.print(tree)
     for a in r.identity.ambiguities:
-        con.print(f"  ! {a}")
-    con.print("\nNote:\nNames are shown masked and are never used alone to link records.")
+        con.print(f"  [bold yellow]! {a}[/bold yellow]")
+    con.print("\n[dim]Note:\nNames are shown masked and are never used alone to link records.[/dim]")
 
 
 @app.command()
@@ -431,17 +477,20 @@ def timeline(case: str = typer.Option(..., "--case"), from_: Optional[str] = typ
     if UI.fmt == "json":
         con.print_json(json.dumps([{"at": e[0].isoformat(), "kind": e[1], "event": e[2], "system": e[3], "source": e[4]} for e in events]))
         return
-    con.print(f"EVENT TIMELINE — {case}\n")
+    con.print(banner(f"EVENT TIMELINE — {case}", "Chronological sequence bounded by audit_at"))
     if clamped:
-        con.print("(--to was later than audit_at; clamped to audit_at)\n")
+        con.print("[dim](--to was later than audit_at; clamped to audit_at)[/dim]\n")
     for at, kind, what, sys_, src in events:
-        con.print(f"{at:%Y-%m-%d %H:%M}  [{kind:<8}] {what}" + (f"  · {src}" if src else ""))
+        badge = timeline_badge(kind)
+        src_part = f"  · [cyan]{src}[/cyan]" if src else ""
+        con.print(f"{at:%Y-%m-%d %H:%M}  {badge} {what}{src_part}")
     reappeared = any(k == "OBSERVED" and "PRESENT" in w for _, k, w, _, _ in events) and any(
         k == "CLAIM" and "DELETE_RECORD" in w and "SUCCESS" in w for _, k, w, _, _ in events)
-    con.print("\nSUMMARY\n")
+    con.print("\n[bold]SUMMARY[/bold]\n")
     if reappeared:
-        con.print("A record was observed PRESENT although a deletion was reported as successful.\n"
-                  "Activity results are claims; the observed state decides.")
+        con.print(panel("A record was observed PRESENT although a deletion was reported as successful.\n"
+                        "Activity results are claims; the observed physical state decides.",
+                        title="[bold red]GHOST DATA DETECTED[/bold red]", border_style="red"))
     if any("SYNC" in w or "repopulated" in w for _, _, w, _, _ in events):
         con.print("Synchronization activity appears in the timeline. Causation requires supporting evidence.")
     if not reappeared:
@@ -458,20 +507,31 @@ def findings(case: str = typer.Option(..., "--case")):
     if UI.fmt == "json":
         con.print_json(json.dumps({"findings": [s.to_json() for s in fs], "unresolved": r.gaps}))
         return
-    con.print(f"FINDINGS — {case}\n")
+    con.print(banner(f"FINDINGS — {case}", "Confirmed policy violations"))
     if not fs:
-        con.print("No confirmed findings.\n")
+        con.print("\n[bold green]No confirmed policy violations.[/bold green]\n")
     ob = {(o.system_id, o.resource_id): o for o in r.obligations}
     for n, s in enumerate(fs, 1):
         o = ob.get((s.system_id, s.resource_id))
-        con.print(f"F-{n:03d}  {s.operation.replace('REPORT_', '')}\n       Severity: {SEVERITY[s.operation]}\n"
-                  f"       System: {s.system_id}\n       Resource: {s.resource_id}\n       Evidence: {s.evidence_id}\n"
-                  f"       Rule: {o.treatment.rule_id if o else '-'}\n\n       Explanation:\n       {FINDING_TEXT[s.operation]}\n")
+        rule_str = o.treatment.rule_id if o else "-"
+        sev = SEVERITY.get(s.operation, "High")
+        op_label = s.operation.replace('REPORT_', '').replace('_', ' ')
+        content = (
+            f"Severity:    [bold red]{sev}[/bold red]\n"
+            f"System:      [bold]{s.system_id}[/bold]\n"
+            f"Resource:    [bold]{s.resource_id}[/bold]\n"
+            f"Evidence:    [cyan]{s.evidence_id}[/cyan]\n"
+            f"Rule:        [dim]{rule_str}[/dim]\n\n"
+            f"Explanation:\n{FINDING_TEXT.get(s.operation, '')}"
+        )
+        con.print(panel(content, title=f"F-{n:03d} [bold white on red] {op_label} [/]", border_style="red"))
+        con.print("")
     if r.gaps:
-        con.print("UNRESOLVED QUESTIONS\n")
+        con.print("[bold yellow]UNRESOLVED QUESTIONS[/bold yellow]\n")
         for g in r.gaps:
-            con.print(f"- {mask_text(g)}")
-    con.print(f"\nRun:\n  data-investigator report --case {case}")
+            con.print(f"  [bold yellow][?][/bold yellow] {mask_text(g)}")
+        con.print("")
+    con.print(f"Run:\n  Davestigator report --case {case}")
 
 
 @app.command()
@@ -488,7 +548,7 @@ def evidence(case: str = typer.Option(..., "--case")):
     if UI.fmt == "json":
         con.print_json(json.dumps(case_to_dict(r)["timeline"]))
         return
-    con.print(f"EVIDENCE — {case}\n")
+    con.print(banner(f"EVIDENCE — {case}", "Direct evidence observations"))
     con.print(t)
     if r.excluded_after_audit:
         con.print("\n[dim]Excluded (after audit_at): " + ", ".join(sorted({o.source_id for o in r.excluded_after_audit})) + "[/dim]")
@@ -507,21 +567,26 @@ def plan(case: str = typer.Option(..., "--case")):
     if UI.fmt == "json":
         con.print_json(json.dumps([x.to_json() for x in r.steps]))
         return
-    con.print(f"REMEDIATION PLAN — {case}\n\nMode: PLAN ONLY\nNo data has been changed.\n")
+    con.print(banner(f"REMEDIATION PLAN — {case}", "Mode: PLAN ONLY — No data has been changed", border_style="blue"))
     if r.deletion_status == "NOT_APPLICABLE":
-        con.print("No deletion authorized by this request.")
+        con.print("\nNo deletion authorized by this request.")
         return
     if r.deletion_status == "COMPLETE":
-        con.print("No remediation required. Verification checks backed by evidence:\n")
-    for phase, title in (("FINDING", "PHASE 1 — FINDINGS"), ("REMEDIATION", "PHASE 2 — REMEDIATION"), ("VERIFICATION", "PHASE 3 — VERIFICATION")):
+        con.print("\n[bold green]No remediation required. Verification checks backed by evidence:[/bold green]\n")
+    phases = [
+        ("FINDING", "[bold red]PHASE 1 — FINDINGS (Evidence-Backed Violations)[/bold red]"),
+        ("REMEDIATION", "[bold yellow]PHASE 2 — REMEDIATION (Targeted Actions to Execute)[/bold yellow]"),
+        ("VERIFICATION", "[bold green]PHASE 3 — VERIFICATION (Post-Remediation Verification Matrix)[/bold green]")
+    ]
+    for phase, title in phases:
         steps = [x for x in r.steps if x.phase.value == phase]
         if not steps:
             continue
-        con.print(title + "\n")
+        con.print("\n" + title + "\n")
         for x in steps:
-            extra = "   Execution: Not performed" if phase == "REMEDIATION" else (f"   Evidence: {x.evidence_id}" if x.evidence_id else "")
-            con.print(f"{x.step_no}. {x.operation} → {x.state}\n   System: {x.system_id}  Resource: {x.resource_id}\n{extra}\n")
-    con.print(f"PLAN STATUS: READY FOR REVIEW\n\nPlan saved:\n  {d / f'{case}-plan.json'}")
+            extra = "     Execution: [yellow]Not performed (Pending Authorization)[/yellow]" if phase == "REMEDIATION" else (f"     Evidence:  [cyan]{x.evidence_id}[/cyan]" if x.evidence_id else "")
+            con.print(f"  [bold]{x.step_no}.[/bold] [bold cyan]{x.operation}[/bold cyan] → [bold]{x.state}[/bold]\n     System: {x.system_id}  Resource: {x.resource_id}\n{extra}\n")
+    con.print(f"PLAN STATUS: [bold white on blue] READY FOR REVIEW [/]\n\nPlan saved:\n  [cyan]{d / f'{case}-plan.json'}[/cyan]")
 
 
 @app.command()
@@ -557,26 +622,26 @@ def verify(case: str = typer.Option(..., "--case"), at: Optional[str] = typer.Op
     if UI.fmt == "json":
         con.print_json(json.dumps({"result": overall, "checks": rows}))
         return
-    con.print(f"VERIFICATION — {case}\n")
+    con.print(banner(f"VERIFICATION — {case}", "Evaluated obligations matrix"))
     for x in rows:
         con.print(f"{x['resource_id']:<22} expected {x['expected']:<10} observed {str(x['observed']):<11} {x['result']}"
                   + (f"  ({x['evidence_id']})" if x["evidence_id"] else ""))
     con.print(f"\nRESULT: {overall}")
     if overall == "VERIFICATION FAILED":
-        con.print(f"\nThe deletion request remains incomplete under the evaluated rules.\n\nNext step:\n  data-investigator findings --case {case}")
+        con.print(f"\nThe deletion request remains incomplete under the evaluated rules.\n\nNext step:\n  Davestigator findings --case {case}")
     if overall == "INCOMPLETE VERIFICATION":
         con.print("\nSome checks could not be verified because evidence was unavailable.")
 
 
 @app.command()
-def report(case: str = typer.Option(..., "--case"), fmt: str = typer.Option("json", "--export", help="json | markdown | csv")):
+def report(case: str = typer.Option(..., "--case"), fmt: str = typer.Option("json", "--export", help="json | markdown | csv | html")):
     """Summarize the investigation and export a report file."""
     con = _con()
     sess = _session(quiet_ai=True)
     r = _investigate(sess, case, show_stages=False)
     s = _settings()
-    if fmt not in ("json", "markdown", "csv"):
-        _fail("--export must be json, markdown or csv", 1)
+    if fmt not in ("json", "markdown", "csv", "html"):
+        _fail("--export must be json, markdown, csv or html", 1)
     p = save_case(r, s.path(s.reports.directory), fmt)
     if UI.fmt == "json":
         con.print_json(json.dumps(case_to_dict(r)))
@@ -584,11 +649,35 @@ def report(case: str = typer.Option(..., "--case"), fmt: str = typer.Option("jso
     d = case_to_dict(r)
     fs = sum(1 for x in r.steps if x.phase.value == "FINDING")
     rem = sum(1 for x in r.steps if x.phase.value == "REMEDIATION")
-    con.print(f"AUDIT REPORT\n\nCase: {case}\nStatus: {status_text(r.deletion_status)}\n\nIDENTITY\n  Resolved: "
+    con.print(banner("AUDIT REPORT", f"Case: {case}", border_style="cyan"))
+    con.print(f"\nStatus: {status_badge(r.deletion_status)}\n\n[bold cyan]IDENTITY[/bold cyan]\n  Resolved: "
               f"{'Yes' if r.identity and r.identity.user_id else 'No'}\n  Identifier kinds: "
-              f"{', '.join(d['identity']['identifier_kinds']) if d['identity'] else '-'}\n\nEVIDENCE\n  Obligations evaluated: {len(r.obligations)}\n"
-              f"  Findings: {fs}\n  Unresolved questions: {len(r.gaps)}\n\nREMEDIATION\n  Proposed steps: {rem}\n  Executed steps: 0\n  Verified steps: 0\n\n"
-              f"OUTPUT FILES\n  {fmt.upper()}: {p}")
+              f"{', '.join(d['identity']['identifier_kinds']) if d['identity'] else '-'}\n\n[bold cyan]EVIDENCE[/bold cyan]\n  Obligations evaluated: {len(r.obligations)}\n"
+              f"  Findings: {fs}\n  Unresolved questions: {len(r.gaps)}\n\n[bold cyan]REMEDIATION[/bold cyan]\n  Proposed steps: {rem}\n  Executed steps: 0\n  Verified steps: 0\n\n"
+              f"[bold cyan]OUTPUT FILES[/bold cyan]\n  {fmt.upper()}: [cyan]{p}[/cyan]")
+
+
+@app.command("dashboard")
+def dashboard(sample: bool = typer.Option(False, "--sample", help="Explore sample cases only.")):
+    """Interactive terminal case browser & forensic dashboard."""
+    from .app import requests_for
+
+    con = _con()
+    sess = _session(quiet_ai=True)
+    reqs = requests_for(sess, sample=sample)
+    con.print(banner("DAVESTIGATOR — INTERACTIVE DASHBOARD", f"Total requests available: {len(reqs)}"))
+
+    t = table("Case ID", "Requester Email", "Reported", "Audit Cutoff", border_style="cyan")
+    for q in reqs[:15]:
+        t.add_row(q.case_id, mask_email(q.email), q.reported_status, f"{q.audit_at:%Y-%m-%d %H:%M}")
+    con.print(t)
+    if len(reqs) > 15:
+        con.print(f"  [dim]... and {len(reqs) - 15} more cases[/dim]\n")
+    con.print("[bold]Quick Actions:[/bold]")
+    con.print("  - Inspect a case:       [cyan]Davestigator audit --case <ID>[/cyan]")
+    con.print("  - View identity graph:  [cyan]Davestigator identity --case <ID>[/cyan]")
+    con.print("  - View evidence line:   [cyan]Davestigator timeline --case <ID>[/cyan]")
+    con.print("  - Export HTML report:   [cyan]Davestigator report --case <ID> --export html[/cyan]\n")
 
 
 @app.command()
@@ -635,12 +724,140 @@ def validate_output(file: Optional[str] = typer.Option(None, "--file", help="Def
     else:
         con.print("OUTPUT VALIDATION\n")
         for name, ok in rep.checks:
-            con.print(f"[{'✓' if ok else '✗'}] {name}")
+            con.print(f"[{'PASS' if ok else 'FAIL'}] {name}")
         con.print(f"\nRESULT: {'PASSED' if rep.ok else 'FAILED'}\n\nValidated file: {p}")
     if not rep.ok:
         _print_issues(rep)
         raise typer.Exit(3)
 
 
+@app.command("serve")
+def serve(host: str = typer.Option("0.0.0.0", "--host", "-h", help="Bind address"),
+          port: int = typer.Option(8000, "--port", "-p", help="Port number")):
+    """Start an HTTP API server so other users can query the CLI via curl."""
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    from .reporting import case_html
+
+    sess = _session(quiet_ai=True)
+    con = _con()
+
+    class AuditHandler(BaseHTTPRequestHandler):
+        def log_message(self, format, *args):
+            if UI.verbose:
+                super().log_message(format, *args)
+
+        def do_GET(self):
+            path = self.path.split("?")[0].strip("/")
+            parts = path.split("/")
+
+            try:
+                if not path:
+                    routes = {
+                        "name": "Davestigator API",
+                        "version": __version__,
+                        "endpoints": {
+                            "GET /status": "Check service and AI health",
+                            "GET /scan": "Scan evidence files",
+                            "GET /audit/<case_id>": "Full case investigation JSON",
+                            "GET /findings/<case_id>": "Violations and ghost data for case",
+                            "GET /timeline/<case_id>": "Event chronology up to audit_at",
+                            "GET /report/<case_id>.html": "Interactive HTML audit certificate",
+                        },
+                        "example_curl": f"curl http://localhost:{port}/audit/case_33",
+                    }
+                    data = json.dumps(routes, indent=2).encode("utf-8")
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Content-Length", str(len(data)))
+                    self.end_headers()
+                    self.wfile.write(data)
+                    return
+
+                if parts[0] == "status":
+                    res = json.dumps({"status": "ok", "version": __version__, "ai": sess.ai_status}, indent=2).encode("utf-8")
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Content-Length", str(len(res)))
+                    self.end_headers()
+                    self.wfile.write(res)
+                    return
+
+                if parts[0] == "scan":
+                    st = Counter(f.status for f in sess.index.files.values())
+                    res = json.dumps({"files": len(sess.index.files), "statuses": dict(st), "ai": sess.ai_status}, indent=2).encode("utf-8")
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Content-Length", str(len(res)))
+                    self.end_headers()
+                    self.wfile.write(res)
+                    return
+
+                if parts[0] in ("audit", "findings", "timeline") and len(parts) > 1:
+                    cid = parts[1]
+                    r = _investigate(sess, cid, show_stages=False)
+                    d = case_to_dict(r)
+                    if parts[0] == "findings":
+                        res_obj = {"case_id": cid, "status": r.deletion_status, "findings": [s.to_json() for s in r.steps if s.phase.value == "FINDING"]}
+                    elif parts[0] == "timeline":
+                        res_obj = {"case_id": cid, "timeline": d["timeline"]}
+                    else:
+                        res_obj = d
+                    payload = json.dumps(res_obj, indent=2).encode("utf-8")
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Content-Length", str(len(payload)))
+                    self.end_headers()
+                    self.wfile.write(payload)
+                    return
+
+                if parts[0] == "report" and len(parts) > 1:
+                    raw_id = parts[1]
+                    cid = raw_id[:-5] if raw_id.endswith(".html") else raw_id
+                    r = _investigate(sess, cid, show_stages=False)
+                    html = case_html(r).encode("utf-8")
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/html; charset=utf-8")
+                    self.send_header("Content-Length", str(len(html)))
+                    self.end_headers()
+                    self.wfile.write(html)
+                    return
+
+                err = json.dumps({"error": f"Unknown endpoint /{path}"}).encode("utf-8")
+                self.send_response(404)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(err)))
+                self.end_headers()
+                self.wfile.write(err)
+
+            except Exception as e:
+                err = json.dumps({"error": str(e)}).encode("utf-8")
+                self.send_response(500)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(err)))
+                self.end_headers()
+                self.wfile.write(err)
+
+    server = ThreadingHTTPServer((host, port), AuditHandler)
+    con.print(banner("DAVESTIGATOR API SERVER", f"Listening on http://{host}:{port}\nReady for curl requests (Ctrl+C to stop)"))
+    con.print("Available curl commands:")
+    con.print(f"  curl http://localhost:{port}/")
+    con.print(f"  curl http://localhost:{port}/status")
+    con.print(f"  curl http://localhost:{port}/scan")
+    con.print(f"  curl http://localhost:{port}/audit/case_33")
+    con.print(f"  curl http://localhost:{port}/findings/case_33")
+    con.print(f"  curl http://localhost:{port}/report/case_33.html\n")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        con.print("\nServer stopped.")
+    finally:
+        server.server_close()
+
+
+from .connect_cli import connect_app  # noqa: E402
+
+app.add_typer(connect_app, name="connect")
+
+
 def run():
-    app()
+    app(prog_name="Davestigator")

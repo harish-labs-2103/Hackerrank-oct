@@ -148,7 +148,7 @@ class Observation:
     """
 
     source_id: str  # file_id / activity_id / audit_id
-    source_kind: Literal["file", "activity", "audit"]
+    source_kind: Literal["file", "activity", "audit", "live"]
     observed_at: datetime
     captured_at: datetime  # when the source became available (manifest captured_at)
     system_id: str

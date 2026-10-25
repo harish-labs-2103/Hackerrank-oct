@@ -1,7 +1,8 @@
-"""Configuration: built-in defaults, optionally overridden by data-investigator.yaml.
+"""Configuration: built-in defaults, optionally overridden by davestigator.yaml.
 
 No secrets live here. The only runtime knobs from the environment are OLLAMA_HOST and
-DATA_INVESTIGATOR_CONFIG.
+DAVESTIGATOR_CONFIG (the old names data-investigator.yaml / DATA_INVESTIGATOR_CONFIG
+are still read as a fallback).
 """
 from __future__ import annotations
 
@@ -12,7 +13,8 @@ import yaml
 from pydantic import BaseModel, ConfigDict
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-CONFIG_NAME = "data-investigator.yaml"
+CONFIG_NAME = "davestigator.yaml"
+LEGACY_CONFIG_NAME = "data-investigator.yaml"
 
 
 class _Strict(BaseModel):
@@ -59,6 +61,20 @@ class SecurityCfg(_Strict):
     allow_reveal: bool = False
 
 
+class ConnectorCfg(_Strict):
+    name: str
+    kind: str  # sql | search | document | kv | object
+    url_env: str  # environment variable holding the connection URL (never the URL itself)
+    options: dict = {}
+
+
+class LiveCfg(_Strict):
+    mappings: str = "mappings.yaml"
+    draft: str = "mappings.draft.yaml"
+    rules: str = "dataset/deletion_rules.csv"  # policy used for live audits
+    journal_dir: str = "reports/evidence"
+
+
 class Settings(_Strict):
     app: AppCfg = AppCfg()
     dataset: DatasetCfg = DatasetCfg()
@@ -67,6 +83,8 @@ class Settings(_Strict):
     investigation: InvestigationCfg = InvestigationCfg()
     agent: AgentCfg = AgentCfg()
     security: SecurityCfg = SecurityCfg()
+    connectors: list[ConnectorCfg] = []
+    live: LiveCfg = LiveCfg()
 
     def path(self, rel: str) -> Path:
         p = Path(rel)
@@ -74,7 +92,11 @@ class Settings(_Strict):
 
 
 def config_path(explicit: str | None = None) -> Path:
-    return Path(explicit or os.environ.get("DATA_INVESTIGATOR_CONFIG") or REPO_ROOT / CONFIG_NAME)
+    chosen = explicit or os.environ.get("DAVESTIGATOR_CONFIG") or os.environ.get("DATA_INVESTIGATOR_CONFIG")
+    if chosen:
+        return Path(chosen)
+    current, legacy = REPO_ROOT / CONFIG_NAME, REPO_ROOT / LEGACY_CONFIG_NAME
+    return legacy if legacy.is_file() and not current.is_file() else current
 
 
 def load_settings(explicit: str | None = None) -> tuple[Settings, Path | None]:

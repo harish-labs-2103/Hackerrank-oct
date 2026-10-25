@@ -5,7 +5,7 @@ import re
 
 from typer.testing import CliRunner
 
-from data_investigator.cli import app
+from davestigator.cli import app
 
 runner = CliRunner()
 ANSI = re.compile(r"\x1b\[")
@@ -17,9 +17,9 @@ def invoke(*args):
 
 def test_version_and_welcome():
     r = runner.invoke(app, ["--version"])
-    assert r.exit_code == 0 and "data-investigator" in r.stdout
+    assert r.exit_code == 0 and "Davestigator" in r.stdout
     r = invoke()
-    assert r.exit_code == 0 and "DATA INVESTIGATOR" in r.stdout and "Read-only" in r.stdout
+    assert r.exit_code == 0 and "DAVESTIGATOR" in r.stdout and "Read-only" in r.stdout
 
 
 def test_usage_error_exit_1():

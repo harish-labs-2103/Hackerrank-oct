@@ -1,6 +1,6 @@
-# Data Investigator — Product & Architecture Implementation Plan
+# Davestigator — Product & Architecture Implementation Plan
 
-**Source documents:** *Data Investigator PRD v1.0* and *Technical Architecture & Implementation Specification v1.0*. Both are proposed designs.
+**Source documents:** *Davestigator PRD v1.0* and *Technical Architecture & Implementation Specification v1.0*. Both are proposed designs.
 **Companion:** `PLAN.md` covers the challenge-specific phases (dataset reconnaissance, policy table, step ordering). This file maps the PRD and tech spec onto a buildable plan and resolves where they conflict with the repo.
 
 **Guiding decision:** Ship Release 0.1, the challenge engine, first and without needing an LLM to run. Every later release adds to it and never changes how deterministic decisions are made.
@@ -21,7 +21,7 @@
 | Confidence scores per evidence | Challenge is graded on exact steps | Keep the 5 confidence dimensions as *labels* in reports, never as thresholds that change output |
 | SQLite as metadata store / SQLAlchemy | 94 evidence files, fits in memory | In-memory indexes + pickle/JSON cache; no persistent DB in 0.1 |
 | LiteLLM or provider SDK | No provider chosen | Thin `ModelClient` protocol; one Anthropic implementation first; LiteLLM optional |
-| `data-investigator` console command | Challenge requires `python code/main.py` | Both: `main.py` calls `cli.app()`; `pyproject.toml` exposes the console script |
+| `Davestigator` console command | Challenge requires `python code/main.py` | Both: `main.py` calls `cli.app()`; `pyproject.toml` exposes the console script |
 
 ---
 
@@ -45,8 +45,8 @@ The spec's layout has 40+ modules. That many modules up front would mean many em
 
 ```text
 code/
-├── main.py                        # `from data_investigator.cli import app; app()`
-├── pyproject.toml                 # deps + console script `data-investigator`
+├── main.py                        # `from davestigator.cli import app; app()`
+├── pyproject.toml                 # deps + console script `Davestigator`
 ├── requirements.txt               # pinned mirror for pip users
 ├── README.md
 ├── config/settings.yaml           # paths, model names, limits, cost table
@@ -54,7 +54,7 @@ code/
 │   ├── classify_request.md
 │   ├── extract_artifact.md
 │   └── investigate.md
-├── data_investigator/
+├── davestigator/
 │   ├── cli.py                     # Typer app
 │   ├── config.py
 │   ├── models.py                  # all Pydantic models (split later if large)

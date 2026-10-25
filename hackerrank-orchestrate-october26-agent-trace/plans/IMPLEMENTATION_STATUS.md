@@ -32,3 +32,22 @@ Where the built system follows or deviates from `PLAN.md`, `PRODUCT_PLAN.md`, `C
    resource is listed as a gap, appears in INCOMPLETE verification (future check, no evidence),
    and is omitted from COMPLETE verification (nothing admissible to cite).
 6. **Inferred account assignment rejected** (see evaluation report, failure #11).
+
+## Connectors (CONNECTOR_PLAN.md / CONNECTOR_CLI_FLOW.md)
+
+| Step | Status | Notes |
+|---|---|---|
+| C1 contract, registry, mapping schema | Done | `code/davestigator/connectors/{base,mapping,__init__}.py`; ids `connector:collection:id` |
+| C2 SQL family + read-only enforcement | Done | Tested on SQLite and a real PostgreSQL 16 (superuser refused, `SELECT`-only role accepted) |
+| C3 `connect snapshot` → offline dataset | Done | Offline audit of the snapshot reproduces the live result (test) |
+| C4 coverage + "no COMPLETE without FULL" | Done | Live batch validator allows INCOMPLETE without findings only for coverage gaps |
+| C5 discovery + PII detection | Done | Dates/numbers excluded from phone detection; values only counted |
+| C6 MongoDB, Elasticsearch/OpenSearch | Done (ES tested with a mock transport; Mongo needs `pymongo`, not installed here) | |
+| C7 Redis, S3 | Implemented, not integration-tested | S3 read-only must be attested (no portable check) |
+| C8 schema-only LLM mapping draft | Done (`map --draft --ai`, enum-validated category) | |
+| C9 logs/streams, SaaS adapters | Not built | registry reports them as planned |
+
+Deviations: `--email --live` is implemented for `audit` only (not yet for findings/plan/verify);
+sampled discovery values are counted in process memory (never displayed, logged or stored) rather
+than inside the database; non-numeric user references cannot be represented in offline snapshots
+(linking then uses emails/phones/hashes) and are counted in the snapshot summary.

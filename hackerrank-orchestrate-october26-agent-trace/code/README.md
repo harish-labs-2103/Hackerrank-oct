@@ -47,9 +47,9 @@ input, so a re-run is deterministic and makes no new model calls.
 ## CLI
 
 ```text
-data-investigator [--verbose] [--quiet] [--config PATH] [--no-color] [--format text|json] <command>
+Davestigator [--verbose] [--quiet] [--config PATH] [--no-color] [--format text|json] <command>
 
-init                      create data-investigator.yaml, check dataset, prepare reports/ (optional)
+init                      create davestigator.yaml, check dataset, prepare reports/ (optional)
 sources list              which sources are available (read-only)
 scan                      parse every evidence file once; parse/AI-extraction status
 audit --case ID | --all   investigate one case / all cases (--sample, --no-llm, --output, --save-reports)
@@ -64,9 +64,43 @@ apply --case ID --dry-run preview only; execution is refused (exit 4)
 validate-output           contract checks with per-case errors (exit 3 on failure)
 ```
 
-`python code/main.py <command>` is identical to `data-investigator <command>`
-(`pip install -e code` installs the console script). Exit codes: 0 ok, 1 usage, 2 input/config,
+`python code/main.py <command>` is identical to `Davestigator <command>`
+(`pip install -e code` installs the `Davestigator` console script). Exit codes: 0 ok, 1 usage, 2 input/config,
 3 output validation failed, 4 not permitted, 5 some cases failed processing.
+
+## Live data stores (connectors)
+
+Audit your own databases read-only instead of a dataset folder. Credentials are only read from
+environment variables; writable credentials are refused; nothing is audited until a person
+approves the mapping.
+
+```bash
+pip install -e "code[postgres]"                 # or [mysql] [mongo] [redis] [s3] [snowflake] …
+export SHOP_DB_URL="postgresql+psycopg2://auditor:***@db.internal/shop"   # a read-only role
+
+Davestigator connect add --name shop --kind sql --url-env SHOP_DB_URL
+Davestigator connect test shop             # exit 4 if the role can write
+Davestigator connect discover shop         # tables + personal-data columns (values never shown)
+Davestigator connect map shop --draft      # writes mappings.draft.yaml (add --ai for schema-only model help)
+#   review mappings.draft.yaml: set review: approved, fix categories, mark identity tables
+Davestigator connect map shop --approve    # -> mappings.yaml (hash recorded in every report)
+
+Davestigator audit --live --email someone@example.com
+Davestigator audit --live --requests requests.csv --output live_output.csv
+Davestigator connect snapshot --subjects requests.csv --out mydata/   # export for offline audit
+```
+
+| Kind | Stores | Status |
+|---|---|---|
+| `sql` | PostgreSQL, MySQL/MariaDB, SQLite (tested); SQL Server, Oracle, Snowflake, BigQuery, Redshift, ClickHouse via SQLAlchemy dialects | read-only verified by grants (PostgreSQL, MySQL) or read-only file mode (SQLite) |
+| `search` | Elasticsearch / OpenSearch (REST) | exact `term` queries only |
+| `document` | MongoDB | needs `pymongo` |
+| `kv` | Redis (key patterns such as `profile:{user_ref}`) | requires a read-only ACL user |
+| `object` | S3-compatible storage (lists keys, never reads objects) | read-only policy must be attested |
+
+A live case is never `COMPLETE` while any approved collection was only partly searched or could not
+be reached; the gap is listed instead. Every read is recorded (without values) in
+`reports/evidence/run_<time>.jsonl`. See `plans/CONNECTOR_PLAN.md` and `plans/CONNECTOR_CLI_FLOW.md`.
 
 ## How it works
 
@@ -88,7 +122,7 @@ request ──► intent (heuristic; LLM second opinion via guard) ──► NOT
         └─► validator (columns, 518 rows, order, JSON, op/state pairs, numbering, evidence ≤ audit_at)
 ```
 
-Package layout: `data_investigator/` — `ingestion`, `normalize`, `identity`, `evidence/`
+Package layout: `davestigator/` — `ingestion`, `normalize`, `identity`, `evidence/`
 (`parsers`, `interpret`, `artifacts`, `registry`), `activity`, `policy`, `engine`, `planner`,
 `validation`, `reporting`, `agent/` (`client`, `guard`, `tasks`), `cli`, `ui/`. Prompts are in
 `code/prompts/` (versioned). Design documents are in `plans/`.

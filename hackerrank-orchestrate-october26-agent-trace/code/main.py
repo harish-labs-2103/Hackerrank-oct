@@ -8,9 +8,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from data_investigator.cli import app  # noqa: E402
+from davestigator.cli import app  # noqa: E402
 
 if __name__ == "__main__":
     if len(sys.argv) == 1:
         sys.argv += ["audit", "--all"]
-    app()
+    app(prog_name="Davestigator")

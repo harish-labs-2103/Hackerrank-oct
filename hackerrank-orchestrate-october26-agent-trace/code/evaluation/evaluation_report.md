@@ -6,7 +6,7 @@
   `dataset/sample_output.csv` by `python code/evaluation/main.py`. The same `Session` (dataset
   loading, evidence index, identity graph, guarded LLM, engine) is used as for the full run, so
   the score reflects the shipped pipeline.
-- **Metrics** (`code/data_investigator/scoring.py`):
+- **Metrics** (`code/davestigator/scoring.py`):
   - *case-level status accuracy*: `deletion_status` equal to gold;
   - *exact row*: status and the whole `steps_json` equal (step_no, phase, system, resource,
     operation, state, evidence);

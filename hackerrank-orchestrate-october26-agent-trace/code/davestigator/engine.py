@@ -70,8 +70,9 @@ class CaseResult:
 
 
 class Investigator:
-    def __init__(self, ds: Dataset, index: EvidenceIndex, classifier: IntentClassifier):
+    def __init__(self, ds: Dataset, index: EvidenceIndex, classifier: IntentClassifier, resolver=None):
         self.ds = ds
+        self.resolver = resolver  # live mode: identity comes from mapped identity collections
         self.idx = index
         self.graph = IdentityGraph(ds.identities, ds.audit_log)
         self.policy = PolicyEngine(ds.rules)
@@ -99,7 +100,7 @@ class Investigator:
                 emit(StageEvent(s, "SKIPPED", "not a deletion request"))
             return CaseResult(req.case_id, req, intent, None, "NOT_APPLICABLE", "NOT_APPLICABLE", [])
 
-        identity = self.graph.resolve(req.email)
+        identity = (self.resolver or self.graph.resolve)(req.email)
         emit(StageEvent("Resolve identity", "DONE" if identity.user_id else "FAILED", identity.user_id or "unresolved"))
         gaps = list(identity.ambiguities)
         if not identity.user_id:
@@ -152,7 +153,7 @@ class Investigator:
                 # attributed to the wrong row), so they never create a link on their own.
                 if o.locator == "screenshot":
                     continue
-                if start <= o.observed_at <= req.audit_at and system_for(o.resource_id):
+                if start <= o.observed_at <= req.audit_at and o.system_id:
                     linked[o.key()].append(o.source_id)
         for a, rid, ids, _ in self.links:
             if start <= a.event_time <= req.audit_at and ids & identity.identifiers and system_for(rid):
@@ -186,6 +187,8 @@ class Investigator:
         for c in CATEGORY_PRIORITY:
             if c in cats:
                 return c
+        if cats:  # organisation-specific category from an approved connector mapping
+            return sorted(cats)[0]
         p = resource_prefix(resource_id)
         return PREFIX_CATEGORY.get(p) if p else None
 
@@ -254,10 +257,12 @@ class Investigator:
         return False
 
     # ------------------------------------------------------------------ #
-    def _plan(self, obligations: list[Obligation]) -> tuple[list[Step], str]:
+    def _plan(self, obligations: list[Obligation], force_incomplete: bool = False) -> tuple[list[Step], str]:
+        """force_incomplete: a required source was not fully searched (live coverage gap), so the
+        case cannot be COMPLETE even without a finding; verification becomes future work."""
         violations = [o for o in obligations if o.satisfied is False]
         planned: list[PlannedStep] = []
-        if violations:
+        if violations or force_incomplete:
             for o in violations:
                 planned.append(PlannedStep(o.treatment.finding_op, o.system_id, o.resource_id, o.evidence.source_id))
                 if o.treatment.remediation_op:

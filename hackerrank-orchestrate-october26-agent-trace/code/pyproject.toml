@@ -1,5 +1,5 @@
 [project]
-name = "data-investigator"
+name = "davestigator"
 version = "0.1.0"
 description = "Evidence-backed deletion auditing CLI + guarded local LLM (Ghost Data Still Exists)"
 requires-python = ">=3.10"
@@ -7,16 +7,26 @@ dependencies = ["typer>=0.12", "rich>=13", "pydantic>=2", "PyYAML>=6", "pypdf>=4
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "ruff"]
+sql = ["SQLAlchemy>=2"]
+postgres = ["SQLAlchemy>=2", "psycopg2-binary"]
+mysql = ["SQLAlchemy>=2", "PyMySQL"]
+mssql = ["SQLAlchemy>=2", "pyodbc"]
+oracle = ["SQLAlchemy>=2", "oracledb"]
+snowflake = ["SQLAlchemy>=2", "snowflake-sqlalchemy"]
+bigquery = ["SQLAlchemy>=2", "sqlalchemy-bigquery"]
+mongo = ["pymongo>=4"]
+redis = ["redis>=5"]
+s3 = ["boto3"]
 
 [project.scripts]
-data-investigator = "data_investigator.cli:run"
+Davestigator = "davestigator.cli:run"
 
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["data_investigator*"]
+include = ["davestigator*"]
 
 [tool.ruff]
 line-length = 130

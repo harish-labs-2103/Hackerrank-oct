@@ -32,7 +32,9 @@ class ValidationReport:
 
 def validate_rows(header: list[str], rows: list[dict], expected_ids: list[str],
                   evidence_times: dict[str, datetime] | None = None,
-                  audit_at: dict[str, datetime] | None = None) -> ValidationReport:
+                  audit_at: dict[str, datetime] | None = None, live: bool = False) -> ValidationReport:
+    """live=True: an INCOMPLETE row may have no finding when a required source was not fully
+    searched (coverage gap); every other rule is unchanged."""
     rep = ValidationReport()
     issues = rep.issues
 
@@ -116,7 +118,7 @@ def validate_rows(header: list[str], rows: list[dict], expected_ids: list[str],
                     issues.append(ValidationIssue(cid, "Evidence references", f"step {i}: {ev} is dated after audit_at"))
             if status == "COMPLETE" and phase != Phase.VERIFICATION:
                 issues.append(ValidationIssue(cid, "COMPLETE cases contain only verification", f"step {i}: {op}"))
-        if status == "INCOMPLETE" and steps and not any(s.get("phase") == "FINDING" for s in steps if isinstance(s, dict)):
+        if status == "INCOMPLETE" and steps and not live and not any(s.get("phase") == "FINDING" for s in steps if isinstance(s, dict)):
             issues.append(ValidationIssue(cid, "INCOMPLETE cases need findings"))
     groups = {
         "Valid status values": {"Invalid status value", "NOT_APPLICABLE must have []"},

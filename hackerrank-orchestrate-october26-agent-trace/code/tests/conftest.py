@@ -16,8 +16,8 @@ def dataset_root():
 @pytest.fixture(scope="session")
 def det_session(dataset_root):
     """Deterministic (no LLM) session over the real participant dataset."""
-    from data_investigator.app import open_session
-    from data_investigator.config import Settings
+    from davestigator.app import open_session
+    from davestigator.config import Settings
 
     s = Settings()
     s.dataset.root = str(dataset_root)

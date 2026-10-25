@@ -18,9 +18,9 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 
-from data_investigator.app import open_session, requests_for  # noqa: E402
-from data_investigator.config import Settings, load_settings  # noqa: E402
-from data_investigator.scoring import load_rows, score  # noqa: E402
+from davestigator.app import open_session, requests_for  # noqa: E402
+from davestigator.config import Settings, load_settings  # noqa: E402
+from davestigator.scoring import load_rows, score  # noqa: E402
 
 
 def run(session, reqs):

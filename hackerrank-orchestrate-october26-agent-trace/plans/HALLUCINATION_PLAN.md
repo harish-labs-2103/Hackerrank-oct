@@ -1,4 +1,4 @@
-# Data Investigator — LLM Hallucination Prevention & Evidence Validation Plan
+# Davestigator — LLM Hallucination Prevention & Evidence Validation Plan
 
 **Source document:** *LLM Hallucination Prevention and Evidence Validation v1.0* (proposed design)
 **Model / runtime:** Gemma 3 4B (`gemma3:4b`) via Ollama

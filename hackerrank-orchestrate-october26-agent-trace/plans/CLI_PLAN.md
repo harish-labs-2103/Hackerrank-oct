@@ -1,4 +1,4 @@
-# Data Investigator — CLI & Terminal Flow Implementation Plan
+# Davestigator — CLI & Terminal Flow Implementation Plan
 
 **Source documents:** *CLI Interface Design Specification v1.0* and *User Terminal Flow Document v1.0*. Both are proposed designs.
 **Companions:**
@@ -15,7 +15,7 @@
 |---|---|---|
 | Boxed banners, tables, ✓/! glyphs | `PRODUCT_PLAN.md` said "plain echo, no rich" | Use **`rich`**. Typer ≥0.12 already depends on it, so this adds no new dependency. All styling goes through one `ui/` module |
 | Welcome screen says "not initialized → run init" | The challenge requires `python code/main.py` to work from a clean checkout | `init` is **optional**. Built-in defaults point at `./dataset` and `./reports`. The welcome screen only *suggests* `init` |
-| Config at `./data-investigator.yaml` | `PRODUCT_PLAN.md` used `code/config/settings.yaml` | Use one file, `data-investigator.yaml` at the repo root, written by `init`. Built-in defaults live in `config.py`. `--config PATH` overrides both |
+| Config at `./davestigator.yaml` | `PRODUCT_PLAN.md` used `code/config/settings.yaml` | Use one file, `davestigator.yaml` at the repo root, written by `init`. Built-in defaults live in `config.py`. `--config PATH` overrides both |
 | `verify` checks "fresh evidence after remediation" | The challenge has no remediation execution, and evidence dated after `audit_at` must not affect `output.csv` | `verify --case ID` evaluates each obligation at `audit_at` by default. `verify --at <ts>` re-evaluates with evidence up to `<ts>`, for the product story only. It **never** writes `output.csv` |
 | Example IDs like `DEL-1001` / `EV-001` | Real IDs are `case_NN`, `evidence_NN`, `activity_NN`, `audit_NN` | All examples in the README and tests use real ID shapes |
 | `findings` shows severity | Severity must come from rules, not the model | Use a fixed map: `REMAINING_RECORD`/`EXPOSED_PII` = High, `ACTIVE_DATA_FLOW`/`RESTORE_RISK` = High, gap = Info |
@@ -29,7 +29,7 @@
 ## 2. Module Layout
 
 ```text
-code/data_investigator/
+code/davestigator/
 ├── cli.py                 # Typer app: commands + global options only; no logic
 ├── ui/
 │   ├── console.py         # Console factory: color/no-color, quiet, verbose, json mode
@@ -51,7 +51,7 @@ code/data_investigator/
 ## 3. Command Surface (final)
 
 ```text
-data-investigator [GLOBAL OPTIONS] <command> [ARGS]
+Davestigator [GLOBAL OPTIONS] <command> [ARGS]
 python code/main.py [GLOBAL OPTIONS] <command> [ARGS]       # identical; challenge entry
 ```
 
@@ -69,7 +69,7 @@ Typer rejects unknown options by default, which satisfies the spec's rule agains
 | Command | Key options | Reads | Writes | Priority |
 |---|---|---|---|---|
 | *(no command)* | — | config presence | — | P0 |
-| `init` | `--force`, `--dataset PATH` | env, dataset | `data-investigator.yaml`, `reports/`, `.env.example` | P0 |
+| `init` | `--force`, `--dataset PATH` | env, dataset | `davestigator.yaml`, `reports/`, `.env.example` | P0 |
 | `sources list` | — | config, dataset | — | P1 |
 | `scan` | `--rebuild` | all sources | `reports/evidence-index.json`, `cache/` | P1 |
 | `audit` | `--case ID` \| `--all`, `--sample`, `--no-llm`, `--workers N`, `--output PATH` | engine | `reports/<case>.json`; with `--all`: `output.csv` | **P0** |
@@ -107,7 +107,7 @@ Typer rejects unknown options by default, which satisfies the spec's rule agains
 
 **Each check** prints `OK`, `WARN` or `FAIL`, with the specific missing item.
 
-**Existing config:** if `data-investigator.yaml` exists and `--force` is not given, prompt for confirmation in a TTY. In a non-TTY, abort with exit 2.
+**Existing config:** if `davestigator.yaml` exists and `--force` is not given, prompt for confirmation in a TTY. In a non-TTY, abort with exit 2.
 
 **Exit codes:** any `FAIL` → exit 2, and the screen does **not** print "Setup complete".
 
@@ -249,7 +249,7 @@ All messages live in `ui/messages.py`, using the wording from spec §17 and flow
 
 ---
 
-## 7. Config Schema (`data-investigator.yaml`)
+## 7. Config Schema (`davestigator.yaml`)
 
 ```yaml
 app:          { log_level: INFO }

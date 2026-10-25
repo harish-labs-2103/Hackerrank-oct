@@ -4,13 +4,13 @@ These use a scripted FakeModelClient, so they are deterministic and need no mode
 """
 import pytest
 
-from data_investigator.agent.client import FakeModelClient
-from data_investigator.agent.guard import GuardLog, check_artifact_rows, check_intent
-from data_investigator.agent.tasks import LLMIntentClassifier
-from data_investigator.evidence.artifacts import image_observations
-from data_investigator.intent import HeuristicIntentClassifier, IntentClassifier
-from data_investigator.models import ManifestEntry
-from data_investigator.normalize import parse_ts
+from davestigator.agent.client import FakeModelClient
+from davestigator.agent.guard import GuardLog, check_artifact_rows, check_intent
+from davestigator.agent.tasks import LLMIntentClassifier
+from davestigator.evidence.artifacts import image_observations
+from davestigator.intent import HeuristicIntentClassifier, IntentClassifier
+from davestigator.models import ManifestEntry
+from davestigator.normalize import parse_ts
 
 KNOWN = {("email", "jain.aditi@gmail.com"), ("user_ref", "user_14")}
 GROUNDED = {"data_flow_1121", "backup_9287"}
@@ -33,13 +33,13 @@ def test_hal02_unknown_or_misread_identifier_dropped():
 
 def test_hal03_model_cannot_set_status(det_session):
     # No schema in the system has a status field the model fills; the engine decides from obligations.
-    q = next(q for q in __import__("data_investigator.app", fromlist=["x"]).requests_for(det_session, sample=True) if q.case_id == "case_24")
+    q = next(q for q in __import__("davestigator.app", fromlist=["x"]).requests_for(det_session, sample=True) if q.case_id == "case_24")
     r = det_session.investigator.investigate(q)
     assert r.deletion_status == "INCOMPLETE"  # account and search result still present, despite reported COMPLETE
 
 
 def test_hal04_post_audit_evidence_is_excluded(det_session):
-    from data_investigator.app import requests_for
+    from davestigator.app import requests_for
 
     q = next(q for q in requests_for(det_session, sample=True) if q.case_id == "case_27")
     r = det_session.investigator.investigate(q)
@@ -56,7 +56,7 @@ def test_hal05_backup_risk_needs_evidence():
 
 
 def test_hal06_unsupported_operation_is_unrepresentable():
-    from data_investigator.models import Phase, Step
+    from davestigator.models import Phase, Step
 
     with pytest.raises(ValueError):
         Step(step_no=1, phase=Phase.REMEDIATION, system_id="db", resource_id="customers", operation="DROP_TABLE", state="ABSENT", evidence_id="")
@@ -79,7 +79,7 @@ def test_hal08_injection_cannot_flip_intent():
 
 
 def test_hal09_retrieval_is_deterministic_not_model_dependent(det_session):
-    from data_investigator.app import requests_for
+    from davestigator.app import requests_for
 
     q = next(q for q in requests_for(det_session, sample=True) if q.case_id == "case_11")
     r = det_session.investigator.investigate(q)
@@ -92,7 +92,7 @@ def test_hal10_ungrounded_quote_rejected():
 
 
 def test_hal11_no_model_still_produces_valid_output(det_session, tmp_path):
-    from data_investigator.app import requests_for, run_batch
+    from davestigator.app import requests_for, run_batch
 
     reqs = requests_for(det_session, sample=True)
     _, rep, failed = run_batch(det_session, reqs, tmp_path / "out.csv")
@@ -130,8 +130,8 @@ def test_catalog_alias_maps_screenshot_label_to_resource():
 def test_prompts_contain_no_concrete_identifiers():
     """v1 of the extraction prompt listed example ids; the 4B model copied them into unrelated
     screenshots and two happened to be real (grounded) resources. Prompts must not contain any."""
-    from data_investigator.agent.tasks import PROMPT_DIR
-    from data_investigator.normalize import EMAIL_RE, RESOURCE_RE, USER_REF_RE
+    from davestigator.agent.tasks import PROMPT_DIR
+    from davestigator.normalize import EMAIL_RE, RESOURCE_RE, USER_REF_RE
 
     for p in PROMPT_DIR.glob("*.md"):
         body = p.read_text()

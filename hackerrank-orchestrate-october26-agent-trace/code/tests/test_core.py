@@ -3,15 +3,15 @@ from datetime import datetime, timezone
 
 import pytest
 
-from data_investigator.evidence.interpret import interpret_record
-from data_investigator.evidence.parsers import _parse_log_line
-from data_investigator.identity import IdentityGraph
-from data_investigator.intent import HeuristicIntentClassifier
-from data_investigator.models import AuditEvent, Phase, Rule, Step
-from data_investigator.normalize import email_hash, ident, parse_ts
-from data_investigator.planner import PlannedStep, finalize
-from data_investigator.policy import PolicyEngine
-from data_investigator.validation import validate_rows
+from davestigator.evidence.interpret import interpret_record
+from davestigator.evidence.parsers import _parse_log_line
+from davestigator.identity import IdentityGraph
+from davestigator.intent import HeuristicIntentClassifier
+from davestigator.models import AuditEvent, Phase, Rule, Step
+from davestigator.normalize import email_hash, ident, parse_ts
+from davestigator.planner import PlannedStep, finalize
+from davestigator.policy import PolicyEngine
+from davestigator.validation import validate_rows
 
 T0 = datetime(2026, 9, 1, tzinfo=timezone.utc)
 
